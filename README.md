@@ -1,79 +1,126 @@
 # Funnel Analytics Agent
 
-A statistical analysis of where users drop off in an e-commerce purchase funnel — and whether those drop-offs are real or just noise.
+Statistical analysis of e-commerce purchase funnel drop-off across 42 million events,
+with full experimentation integrity validation.
 
 ---
 
-## The question
+## Overview
 
-A product team wants to know: which categories have the worst conversion, and can we trust that finding statistically?
+This project identifies where users drop off in a view → cart → purchase funnel,
+quantifies conversion gaps across product categories, and validates findings using
+a rigorous statistical testing pipeline.
 
-This project answers that using 42 million real e-commerce events from October 2019.
+**Dataset:** Kaggle E-Commerce Behavior Data (mkechinov) · October 2019  
+**Scale:** 42,448,764 events · 3,022,290 unique users · 166,794 products
 
 ---
 
-## What I found
+## Key Findings
 
-Overall, 11.49% of users who viewed a product went on to purchase something.
+### Overall Funnel
 
-But that average hides a big gap between categories:
-
-| Category | Conversion | vs Average |
+| Stage | Unique Users | Conversion Rate |
 |---|---|---|
-| Electronics | 11.88% | +0.39pp |
-| Appliances | 9.05% | -2.44pp |
-| Computers | 6.52% | -4.97pp |
-| Apparel | 2.00% | -9.49pp |
+| View | 3,022,130 | — |
+| Cart | 337,117 | 11.15% of viewers |
+| Purchase | 347,118 | 11.49% of viewers |
 
-Apparel converts at 2% vs electronics at 11.88% — a 9.88pp gap. I ran a z-test to confirm this isn't random noise: p < 0.0001, 95% CI: 9.77–9.98pp. The gap is real and precisely estimated.
+Note: purchase count exceeds cart count due to a direct buy-now path that bypasses cart.
+View-to-purchase is used as the primary conversion metric throughout.
 
-A retroactive power analysis showed we only needed 3,077 users per segment to detect a 1pp lift at 80% power. We had 259,014 apparel users — the finding is rock solid.
+### Category Breakdown
+
+| Category | Viewers | Conversion | vs Site Average |
+|---|---|---|---|
+| Electronics | 1,683,322 | 11.88% | +0.39pp |
+| Appliances | 544,299 | 9.05% | -2.44pp |
+| Computers | 248,605 | 6.52% | -4.97pp |
+| Furniture | 202,651 | 2.79% | -8.70pp |
+| Apparel | 259,014 | 2.00% | -9.49pp |
+
+### Statistical Validation — Electronics vs Apparel
+
+| Metric | Value |
+|---|---|
+| Observed gap | 9.88pp |
+| Z-test statistic | 152.29 |
+| P-value | < 0.0001 |
+| 95% Confidence interval | 9.77pp – 9.98pp |
+| Sample size needed (1pp lift, 80% power) | 3,077 users |
+| Apparel viewers available | 259,014 users |
+| Test status | Adequately powered |
+
+The gap is statistically significant and precisely estimated.
+The tight CI (9.77–9.98pp) confirms the effect size is reliable, not just directional.
 
 ---
 
-## The experimentation integrity checks
+## Experimentation Integrity Checks
 
-Most funnel analyses stop at the conversion rate. This one goes further.
+Standard funnel analyses report conversion rates.
+This project also validates the statistical conditions under which those findings can be trusted.
 
-**Peeking problem:** If a team checks experiment results daily and stops when p < 0.05, the false positive rate inflates from 5% to 28.3%. I simulated this on the actual dataset across 1,000 runs to show the inflation on real data, not just theory.
+### Peeking Problem Simulation
 
-**mSPRT sequential testing:** The correct solution to peeking. Using a likelihood ratio approach instead of a fixed p-value, false positives dropped from 28.3% to 10.0% under the same daily checking conditions.
+Simulated 1,000 A/B test runs with daily result checking and no true effect.
+Under daily peeking, false positive rate inflated from the nominal 5% to **28.3%** —
+meaning more than 1 in 4 significant findings would be noise.
+Simulation run on actual dataset user volumes, not synthetic data.
 
-**Bonferroni correction:** Running z-tests across all 10 category segments simultaneously. Without correction the family-wise false positive rate would be ~40%. All 10 findings survived Bonferroni correction.
+### mSPRT Sequential Testing
 
-**Simpson's paradox check:** Electronics looks strong overall because smartphones alone convert at 12.34% and dominate the category. Several electronics subcategories (camera, audio acoustic) convert at 2.1–2.3% — close to apparel rates. No paradox detected, but the composition effect is worth flagging.
+Applied a mixture Sequential Probability Ratio Test (mSPRT) as an alternative
+to the standard z-test under continuous monitoring.
+False positive rate reduced from 28.3% to **10.0%** under identical peeking conditions.
+mSPRT allows valid inference at any sample size — eliminating the need to
+pre-commit to a fixed stopping point.
+
+### Bonferroni Correction
+
+Z-tests run simultaneously across all 10 category segments vs site average.
+Without correction, family-wise false positive rate: ~40%.
+With Bonferroni (adjusted alpha = 0.005): all 10 findings remained significant.
+
+### Simpson's Paradox Check
+
+Electronics aggregate conversion (11.88%) is driven by smartphones (12.34% conversion,
+1.3M viewers). Several electronics subcategories — camera (2.15%), audio acoustic (2.34%) —
+convert at rates comparable to apparel. No directional reversal detected,
+but the composition effect is a material caveat on the category-level finding.
 
 ---
 
-## Dataset
+## Project Structure
 
-[E-Commerce Behavior Data — Kaggle](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store)
-
-42,448,764 events · 3,022,290 unique users · 166,794 products · October 2019
+| File | Description |
+|---|---|
+| `load_data.py` | Chunked CSV ingestion into SQLite (300K rows/chunk) |
+| `funnel_analysis.py` | Funnel conversion rates by stage and category, bar chart |
+| `stats_validation.py` | Two-proportion z-test, 95% CI, retroactive power analysis |
+| `experimentation.py` | Peeking simulation, mSPRT, Bonferroni correction, Simpson's paradox |
 
 ---
 
-## How to run
+## Reproducing the Analysis
 
 ```bash
 git clone https://github.com/Brinno-j/funnel-analytics-agent
 cd funnel-analytics-agent
 pip install -r requirements.txt
 
-# Download dataset from Kaggle and place in data/
-python load_data.py        # Load into SQLite
-python funnel_analysis.py  # Funnel by stage and category
-python stats_validation.py # Z-test, CI, power analysis
-python experimentation.py  # Peeking, mSPRT, Bonferroni, Simpson's paradox
+# Download dataset via Kaggle CLI
+kaggle datasets download -d mkechinov/ecommerce-behavior-data-from-multi-category-store -p data/
+
+# Run in sequence
+python load_data.py
+python funnel_analysis.py
+python stats_validation.py
+python experimentation.py
 ```
 
 ---
 
-## Files
+## Technical Stack
 
-| File | What it does |
-|---|---|
-| `load_data.py` | Loads 42M rows into SQLite via chunked pandas processing |
-| `funnel_analysis.py` | Funnel conversion rates by stage and category |
-| `stats_validation.py` | Z-test, confidence interval, power analysis |
-| `experimentation.py` | Peeking simulation, mSPRT, Bonferroni correction, Simpson's paradox |
+Python · pandas · SQLite · statsmodels · scipy · matplotlib · numpy
