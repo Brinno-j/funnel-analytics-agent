@@ -1,7 +1,9 @@
 # Funnel Analytics Agent
 
 Statistical analysis of e-commerce purchase funnel drop-off across 42 million events,
-with full experimentation integrity validation.
+with full experimentation integrity validation and a natural language query agent
+(Gemini 3.5 Flash) enabling stakeholders to query the funnel data in plain English
+without SQL knowledge.
 
 ---
 
